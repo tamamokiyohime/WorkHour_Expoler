@@ -19,9 +19,10 @@ namespace CalendarQuickstart
     {
         // If modifying these scopes, delete your previously saved credentials
         // at ~/.credentials/calendar-dotnet-quickstart.json
-        static string[] Scopes = { CalendarService.Scope.CalendarReadonly };
+        static string[] Scopes = { CalendarService.Scope.CalendarEventsReadonly };
         static string ApplicationName = "Google Calendar API .NET Quickstart";
         static string[] weekday = { "一", "二", "三", "四", "五", "六", "日" };
+        static string calenderID = "8k13f6uukhu1r12no3p0hbfin8@group.calendar.google.com";
         static void Main(string[] args)
         {
             // Create Google Calendar API service.
@@ -45,28 +46,28 @@ namespace CalendarQuickstart
                 HttpClientInitializer = credential,
                 ApplicationName = ApplicationName,
             });
-            //取得登入人的日曆清單
-            CalendarListResource.ListRequest request = service.CalendarList.List();
-            CalendarList cal = request.Execute();
-            Console.Write("Auto catching calender ID of 工讀值班班表(集思軒)..... ->");
-            bool getCalender = false;
-            CalendarListEntry calender = new CalendarListEntry();
-            //尋找日曆清單裡是否有「工讀值班班表(集思軒)」，並取得calenderID
-            foreach (var summary in cal.Items)
-            {
-                if (string.Equals(summary.Summary, "工讀值班班表(集思軒)"))
-                {
-                    calender = summary;
-                    getCalender = true;
-                }
-            }
-            if (getCalender)
-                Console.WriteLine(calender.Id.ToString());
-            else
-            {
-                Console.WriteLine("Unable to get calender ID.... exit");
-                return;
-            }
+            ////取得登入人的日曆清單
+            //CalendarListResource.ListRequest request = service.CalendarList.List();
+            //CalendarList cal = request.Execute();
+            //Console.Write("Auto catching calender ID of 工讀值班班表(集思軒)..... ->");
+            //bool getCalender = false;
+            //CalendarListEntry calender = new CalendarListEntry();
+            ////尋找日曆清單裡是否有「工讀值班班表(集思軒)」，並取得calenderID
+            //foreach (var summary in cal.Items)
+            //{
+            //    if (string.Equals(summary.Summary, "工讀值班班表(集思軒)"))
+            //    {
+            //        calender = summary;
+            //        getCalender = true;
+            //    }
+            //}
+            //if (getCalender)
+            //    Console.WriteLine(calender.Id.ToString());
+            //else
+            //{
+            //    Console.WriteLine("Unable to get calender ID.... exit");
+            //    return;
+            //}
             Console.WriteLine("----------------------------");
             Console.Write("請輸入下載日期(yyyy-MM)：");
             int inputyear = 0;
@@ -83,7 +84,8 @@ namespace CalendarQuickstart
             CheckInput4hoursplit(Console.ReadLine(), out split4hour);
             
             //查詢calenderID中指定日期範圍的全部事件
-            EventsResource.ListRequest request1 = service.Events.List(calender.Id);
+            //EventsResource.ListRequest request1 = service.Events.List(calender.Id);
+            EventsResource.ListRequest request1 = service.Events.List(calenderID);
             //Google apis中指定TimeMin與TimeMax的格式必須是RCF1123，不過這裡用Datetime傳所以.Parse中也許不用照RCF寫
             request1.TimeMin = DateTime.Parse(inputyear.ToString("0000") + "-" + inputmonth.ToString("00") + "-01T00:00:00+08:00");     //日期須為RCF1123 (yyyy-MM-ddTHH:mm:ss'GMT')
             request1.TimeMax = DateTime.Parse(inputyear.ToString("0000") + "-" + inputmonth.ToString("00") + "-"+ DateTime.DaysInMonth(inputyear, inputmonth).ToString() + "T23:59:59+08:00");
