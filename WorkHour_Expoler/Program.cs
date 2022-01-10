@@ -13,7 +13,7 @@ using System.Text.RegularExpressions;
 #pragma warning disable CS8602
 #pragma warning disable CS8629
 
-namespace CalendarQuickstart
+namespace Working_hours_Exporter
 {
     class Program
     {
@@ -25,6 +25,7 @@ namespace CalendarQuickstart
         static string calenderID = "8k13f6uukhu1r12no3p0hbfin8@group.calendar.google.com";
         static void Main(string[] args)
         {
+            Console.Title = "Working hour Exporter -> 工讀值班班表(集思軒)";
             // Create Google Calendar API service.
             UserCredential credential;
             Console.WriteLine("Google Login...");
@@ -86,10 +87,9 @@ namespace CalendarQuickstart
             //查詢calenderID中指定日期範圍的全部事件
             //EventsResource.ListRequest request1 = service.Events.List(calender.Id);
             EventsResource.ListRequest request1 = service.Events.List(calenderID);
-            //Google apis中指定TimeMin與TimeMax的格式必須是RCF1123，不過這裡用Datetime傳所以.Parse中也許不用照RCF寫
-            request1.TimeMin = DateTime.Parse(inputyear.ToString("0000") + "-" + inputmonth.ToString("00") + "-01T00:00:00+08:00");     //日期須為RCF1123 (yyyy-MM-ddTHH:mm:ss'GMT')
-            request1.TimeMax = DateTime.Parse(inputyear.ToString("0000") + "-" + inputmonth.ToString("00") + "-"+ DateTime.DaysInMonth(inputyear, inputmonth).ToString() + "T23:59:59+08:00");
-            request1.OrderBy = EventsResource.ListRequest.OrderByEnum.StartTime;
+            //Google apis中指定TimeMin與TimeMax的格式必須是RCF1123，不過這裡用Datetime傳所以不照RCF寫
+            request1.TimeMin = new DateTime(inputyear, inputmonth, 01, 01, 00, 00, DateTimeKind.Local);
+            request1.TimeMax = new DateTime(inputyear, inputmonth, DateTime.DaysInMonth(inputyear, inputmonth), 23, 59, 59, DateTimeKind.Local);request1.OrderBy = EventsResource.ListRequest.OrderByEnum.StartTime;
             request1.ShowDeleted = false;
             request1.SingleEvents = true;
             Events events = request1.Execute();
@@ -116,34 +116,26 @@ namespace CalendarQuickstart
                         DateTime start = (DateTime)eventItem.Start.DateTime;
                         DateTime end = (DateTime)eventItem.End.DateTime;
                         TimeSpan duration = end - start;
-                        DateTime nextstart = start;
-                        TimeSpan restime = new(0, 30, 0);
-                        TimeSpan maxtime = new(4, 0, 0);
+                        
 
                         if (split4hour)
                         {
+                            TimeSpan restime = new(0, 30, 0);
+                            TimeSpan maxtime = new(4, 0, 0);
+                            DateTime nextstart = start;
+
                             while (true)//自動將大於4小時的時間拆開，並在中間隔出30分鐘空白
                             {
-                                bool beakflag = false;
                                 DataRow row = dataSet.Tables[eventItem.Summary].NewRow();
                                 row["Date"] = start.ToString("dd");
                                 row["Weekday"] = weekday[(int)start.DayOfWeek];
-
-                                if (duration.TotalHours > 4.00f)
-                                {
-                                    row["Time"] = nextstart.ToString("HH：mm") + "～" + (nextstart + maxtime).ToString("HH：mm");
-                                    row["Duration"] = 4.00f;
-                                    nextstart += maxtime + restime;
-                                    duration -= maxtime;
-                                }
-                                else
-                                {
-                                    row["Time"] = nextstart.ToString("HH：mm") + "～" + (nextstart + duration).ToString("HH：mm");
-                                    row["Duration"] = duration.TotalHours;
-                                    beakflag = true;
-                                }
+                                TimeSpan addup = duration > maxtime ? new(4, 0, 0) : duration;
+                                row["Time"] = nextstart.ToString("HH：mm") + "～" + (nextstart + addup).ToString("HH：mm");
+                                row["Duration"] = addup.TotalHours;
+                                nextstart += addup + restime;
                                 dataSet.Tables[eventItem.Summary].Rows.Add(row);
-                                if (beakflag) break;
+                                if (duration <= maxtime) break;
+                                else    duration -= maxtime;
                             }
                         }
                         else
@@ -165,8 +157,12 @@ namespace CalendarQuickstart
                 //Console.WriteLine(tabletostring(table));
                 Getdocx(table, inputyear.ToString("0000") + "-" + inputmonth.ToString("00"));
             }
-            Console.WriteLine("Process Finish.");
-            Console.Read();
+            Console.WriteLine("Process Finish. Closing in ");
+            for (int i = 3; i > 0; i--) 
+            {
+                Console.Write(i.ToString() + ".. ");
+                Thread.Sleep(1000);
+            }
         }
         static int CheckInputDateFormate(string input, out int year, out int day)
         {
@@ -206,27 +202,27 @@ namespace CalendarQuickstart
             byte[] byteArray = File.ReadAllBytes("template.docx");
             using (MemoryStream stream = new MemoryStream())
             {
-                stream.Write(byteArray, 0, (int)byteArray.Length);
+                stream.Write(byteArray, 0, byteArray.Length);
                 //以記憶流中的模板檔進行編輯
                 using (WordprocessingDocument doc = WordprocessingDocument.Open(stream, true))
                 {
                     // Create an empty table.
                     Table table = new Table();
                     // Create a TableProperties object and specify its border information.
-                    TableProperties tblProp = new TableProperties(
-                        new TableBorders(
-                            new TopBorder()     { Val = new EnumValue<BorderValues>(BorderValues.Single), Size = 5 },
-                            new BottomBorder()  { Val = new EnumValue<BorderValues>(BorderValues.Single), Size = 5 },
-                            new LeftBorder()    { Val = new EnumValue<BorderValues>(BorderValues.Single), Size = 5 },
-                            new RightBorder()   { Val = new EnumValue<BorderValues>(BorderValues.Single), Size = 5 },
-                            new InsideHorizontalBorder()    { Val = new EnumValue<BorderValues>(BorderValues.Single), Size = 5 },
-                            new InsideVerticalBorder()      { Val = new EnumValue<BorderValues>(BorderValues.Single), Size = 5 }
-                        )
-                    );
-                    // Append the TableProperties object to the empty table.
-                    table.AppendChild<TableProperties>(tblProp);
+                    table.AppendChild(
+                        new TableProperties(
+                            new TableBorders(
+                                new TopBorder()                 { Val = new EnumValue<BorderValues>(BorderValues.Single), Size = 5 },
+                                new BottomBorder()              { Val = new EnumValue<BorderValues>(BorderValues.Single), Size = 5 },
+                                new LeftBorder()                { Val = new EnumValue<BorderValues>(BorderValues.Single), Size = 5 },
+                                new RightBorder()               { Val = new EnumValue<BorderValues>(BorderValues.Single), Size = 5 },
+                                new InsideHorizontalBorder()    { Val = new EnumValue<BorderValues>(BorderValues.Single), Size = 5 },
+                                new InsideVerticalBorder()      { Val = new EnumValue<BorderValues>(BorderValues.Single), Size = 5 }
+                                )
+                            )
+                        );
                     //寫入行首
-                    table.Append(GetRow("日期", "星期", "工作項目", "工作地點", "起迄時間", "時數", "工讀生簽章", "館員核對"));
+                    table.Append(GetRow("日期", "星期", "工作項目", "工作地點", "起迄時間", "時數", "工讀生簽章", "館員核對", true));
                     float totalHour = 0;
                     int rowcount = 1;
                     foreach (DataRow row in dt.Rows)
@@ -234,7 +230,7 @@ namespace CalendarQuickstart
                         if (rowcount == 23) //到頁尾的時候加入下頁行以及在下一頁寫入行首
                         {
                             table.Append(GetMergedRow("接　　續　　下　　頁", true));
-                            table.Append(GetRow("日期", "星期", "工作項目", "工作地點", "起迄時間", "時數", "工讀生簽章", "館員核對"));
+                            table.Append(GetRow("日期", "星期", "工作項目", "工作地點", "起訖時間", "時數", "工讀生簽章", "館員核對", true));
                             rowcount = 1;
                         }
                         totalHour += float.Parse(row["Duration"].ToString());   //計算總時數
@@ -251,7 +247,7 @@ namespace CalendarQuickstart
                     // Append the table to the document.
                     //doc.MainDocumentPart.Document.Body.Append(table);
                     //將表格寫入到doc中
-                    doc.MainDocumentPart.Document.Body.AddChild(table);
+                    doc.MainDocumentPart.Document.Body.AddChild(table);                    
 
                     // Save changes to the MainDocumentPart.
                     doc.MainDocumentPart.Document.Save();
@@ -262,20 +258,19 @@ namespace CalendarQuickstart
             }
             return true;
         }
-        static TableRow GetRow(string date, string weekday, string content, string place, string time, string hour, string sign, string check)
+        static TableRow GetRow(string date, string weekday, string content, string place, string time, string hour, string sign, string check, bool title = false)
         {
             TableRow tr = new TableRow();
-            tr.Append(GetCell(6, date));
-            tr.Append(GetCell(6, weekday));
-            tr.Append(GetCell(28, content));
-            tr.Append(GetCell(8, place));
-            tr.Append(GetCell(18, time));
-            tr.Append(GetCell(6, hour));
-            tr.Append(GetCell(14, sign));
-            tr.Append(GetCell(14, check));
+            tr.Append(GetCell(6, date, title));
+            tr.Append(GetCell(6, weekday, title));
+            tr.Append(GetCell(28, content, title));
+            tr.Append(GetCell(8, place, title));
+            tr.Append(GetCell(18, time, title));
+            tr.Append(GetCell(6, hour, title));
+            tr.Append(GetCell(14, sign, title));
+            tr.Append(GetCell(14, check, title));
             return tr;
         }
-
         static TableRow GetMergedRow(string text, bool iscenter)
         {
             TableRow tr = new TableRow();
@@ -287,18 +282,9 @@ namespace CalendarQuickstart
             tr.Append(GetMergedCell(false));
             tr.Append(GetMergedCell(false));
             tr.Append(GetMergedCell(false));
-            //tr.Append(new TableCell(new TableCellProperties(new HorizontalMerge() { Val = MergedCellValues.Restart }), new Paragraph(new Run(new Text("output")))));
-            //tr.Append(new TableCell(new TableCellProperties(new HorizontalMerge() { Val = MergedCellValues.Continue })));
-            //tr.Append(new TableCell(new TableCellProperties(new HorizontalMerge() { Val = MergedCellValues.Continue })));
-            //tr.Append(new TableCell(new TableCellProperties(new HorizontalMerge() { Val = MergedCellValues.Continue })));
-            //tr.Append(new TableCell(new TableCellProperties(new HorizontalMerge() { Val = MergedCellValues.Continue })));
-            //tr.Append(new TableCell(new TableCellProperties(new HorizontalMerge() { Val = MergedCellValues.Continue })));
-            //tr.Append(new TableCell(new TableCellProperties(new HorizontalMerge() { Val = MergedCellValues.Continue })));
-            //tr.Append(new TableCell(new TableCellProperties(new HorizontalMerge() { Val = MergedCellValues.Continue })));
             return tr;
         }
-
-        static TableCell GetCell(int percent, string text)
+        static TableCell GetCell(int percent, string text, bool isTitle = false)
         {
             TableCell tc = new TableCell();
             tc.Append(
@@ -311,26 +297,41 @@ namespace CalendarQuickstart
                     new TableCellVerticalAlignment() { Val = TableVerticalAlignmentValues.Center }
                     )
                 );
-            // Specify the table cell content.
             tc.Append(
-                 new Paragraph(
-                    new ParagraphProperties(new Justification() { Val = JustificationValues.Center }),
-                    new DocumentFormat.OpenXml.Wordprocessing.Run(new DocumentFormat.OpenXml.Wordprocessing.Text(text))
+                new Paragraph(
+                    new ParagraphProperties(
+                        new Justification() { Val = JustificationValues.Center }
+                        ),
+                    new Run(
+                        new RunProperties(new Bold() { Val = OnOffValue.FromBoolean(isTitle) }),
+                        new Text(text)
                         )
+                    )
                 );
             return tc;
         }
-
         static TableCell GetMergedCell(bool isStart, bool isCenter = false, string text = "")
         {
             TableCell tc = new TableCell();
-            tc.Append(new TableCellProperties(new HorizontalMerge() { Val = isStart ? MergedCellValues.Restart : MergedCellValues.Continue }));
+            tc.Append(
+                new TableCellProperties(
+                    new HorizontalMerge() { Val = isStart ? MergedCellValues.Restart : MergedCellValues.Continue }
+                    )
+                );
             // Specify the table cell content.
-            tc.Append(new Paragraph(new ParagraphProperties(new Justification() { Val = isCenter ? JustificationValues.Center : JustificationValues.Left }), new Run(new Text(isStart ? text : ""))));
-            //if (isStart) tc.Append(new Paragraph(new Run(new Text(text))));
+            tc.Append(
+                new Paragraph(
+                    new ParagraphProperties(
+                        new Justification() { Val = isCenter ? JustificationValues.Center : JustificationValues.Left }
+                        ),
+                    new Run(
+                        new RunProperties(new Bold() { Val = OnOffValue.FromBoolean(true) }),
+                        new Text(isStart ? text : "")
+                        )
+                    )
+                );
             return tc;
         }
-
         static string tabletostring(DataTable dt)
         {
             string s = dt.TableName + "\n";
@@ -352,4 +353,5 @@ namespace CalendarQuickstart
             return s;
         }
     }
+
 }
